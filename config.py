@@ -6,6 +6,9 @@ import re
 PROJECT_DIR = Path(__file__).resolve().parent
 STORAGE_DIR = PROJECT_DIR / "storage"
 QDRANT_PATH = STORAGE_DIR / "qdrant_db"
+ASSETS_DB_PATH = STORAGE_DIR / "assets.sqlite"
+TEXT_VECS_PATH = STORAGE_DIR / "text_vectors.npy"
+VISION_VECS_PATH = STORAGE_DIR / "vision_vectors.npy"
 BM25_PATH = STORAGE_DIR / "bm25_index.pkl"
 API_CACHE_PATH = STORAGE_DIR / "sand3d_api.txt"
 OUTPUT_DIR = PROJECT_DIR / "outputs"

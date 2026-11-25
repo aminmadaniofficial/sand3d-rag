@@ -10,20 +10,17 @@ from pathlib import Path
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from qdrant_client import QdrantClient
-from qdrant_client.models import FieldCondition, Filter, MatchValue, Range
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModel, AutoProcessor
 
 from config import (
     BM25_PATH,
-    COLLECTION_NAME,
-    QDRANT_PATH,
     TEXT_MODEL_ID,
     VISION_MODEL_ID,
     extract_feature_tensor,
     tokenize_bm25,
 )
+from store import AssetStore
 
 
 @dataclass
@@ -56,7 +53,7 @@ class Sand3DRetriever:
         self.device = _pick_device(device)
         self.dtype = torch.float16 if self.device.startswith("cuda") else torch.float32
 
-        self.client = QdrantClient(path=str(QDRANT_PATH))
+        self.store = AssetStore()
         with open(BM25_PATH, "rb") as f:
             bm25_data = pickle.load(f)
         self.bm25 = bm25_data["bm25"]
@@ -99,7 +96,7 @@ class Sand3DRetriever:
         raise RuntimeError("Failed to load vision model.")
 
     def close(self) -> None:
-        self.client.close()
+        self.store.close()
 
     def _encode_text_bge(self, text: str) -> list[float]:
         vec = self.text_model.encode(
@@ -131,21 +128,6 @@ class Sand3DRetriever:
         return feats[0].cpu().tolist()
 
     @staticmethod
-    def _build_qdrant_filter(
-        min_score: float, split: str | None, domain: str | None
-    ) -> Filter | None:
-        conditions = []
-        if min_score > 0:
-            conditions.append(
-                FieldCondition(key="semantic_score", range=Range(gte=min_score))
-            )
-        if split:
-            conditions.append(FieldCondition(key="split", match=MatchValue(value=split)))
-        if domain:
-            conditions.append(FieldCondition(key="domain", match=MatchValue(value=domain)))
-        return Filter(must=conditions) if conditions else None
-
-    @staticmethod
     def _passes_payload_filter(
         payload: dict, min_score: float, split: str | None, domain: str | None
     ) -> bool:
@@ -175,36 +157,31 @@ class Sand3DRetriever:
         if not query_text and not image_path:
             raise ValueError("Provide at least one of query_text or image_path.")
 
-        q_filter = self._build_qdrant_filter(min_score=min_score, split=split, domain=domain)
         ranked_lists: list[tuple[str, float, list[tuple[int, dict | None]]]] = []
 
         if query_text:
             text_vec = self._encode_text_bge(query_text)
-            text_res = self.client.query_points(
-                collection_name=COLLECTION_NAME,
-                query=text_vec,
-                using="text",
-                query_filter=q_filter,
+            text_res = self.store.search_vector(
+                vector_name="text",
+                query_vec=text_vec,
                 limit=candidate_k,
-                with_payload=True,
-            ).points
-            ranked_lists.append(
-                ("bge_text", text_weight, [(p.id, p.payload) for p in text_res])
+                min_score=min_score,
+                split=split,
+                domain=domain,
             )
+            ranked_lists.append(("bge_text", text_weight, text_res))
 
             if self.vision_model is not None and vision_text_weight > 0:
                 vis_text_vec = self._encode_text_siglip(query_text)
-                vis_text_res = self.client.query_points(
-                    collection_name=COLLECTION_NAME,
-                    query=vis_text_vec,
-                    using="vision",
-                    query_filter=q_filter,
+                vis_text_res = self.store.search_vector(
+                    vector_name="vision",
+                    query_vec=vis_text_vec,
                     limit=candidate_k,
-                    with_payload=True,
-                ).points
-                ranked_lists.append(
-                    ("siglip_text", vision_text_weight, [(p.id, p.payload) for p in vis_text_res])
+                    min_score=min_score,
+                    split=split,
+                    domain=domain,
                 )
+                ranked_lists.append(("siglip_text", vision_text_weight, vis_text_res))
 
             tokens = tokenize_bm25(query_text)
             if tokens and bm25_weight > 0:
@@ -214,10 +191,7 @@ class Sand3DRetriever:
                 )[: candidate_k * 2]
                 bm25_ids = [idx for idx in top_indices if scores[idx] > 0]
                 if bm25_ids:
-                    records = self.client.retrieve(
-                        collection_name=COLLECTION_NAME, ids=bm25_ids, with_payload=True
-                    )
-                    by_id = {r.id: r.payload for r in records}
+                    by_id = self.store.get_by_ids(bm25_ids)
                     bm25_filtered = [
                         (idx, by_id[idx])
                         for idx in bm25_ids
@@ -230,17 +204,15 @@ class Sand3DRetriever:
             if self.vision_model is None:
                 raise RuntimeError("Vision model was not loaded (load_vision=False).")
             img_vec = self._encode_image_siglip(image_path)
-            img_res = self.client.query_points(
-                collection_name=COLLECTION_NAME,
-                query=img_vec,
-                using="vision",
-                query_filter=q_filter,
+            img_res = self.store.search_vector(
+                vector_name="vision",
+                query_vec=img_vec,
                 limit=candidate_k,
-                with_payload=True,
-            ).points
-            ranked_lists.append(
-                ("siglip_image", image_weight, [(p.id, p.payload) for p in img_res])
+                min_score=min_score,
+                split=split,
+                domain=domain,
             )
+            ranked_lists.append(("siglip_image", image_weight, img_res))
 
         fused_scores: dict[int, float] = {}
         payloads: dict[int, dict] = {}

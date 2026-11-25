@@ -11,7 +11,7 @@ Instead of fine-tuning an LLM from scratch, this project indexes prompts, taxono
 | **Multilingual Text Embedding** | [`BAAI/bge-m3`](https://huggingface.co/BAAI/bge-m3) (1024-dim) | Semantic retrieval across 100+ languages (including Persian ↔ English cross-lingual search) |
 | **Vision & Cross-Modal Embedding** | [`google/siglip2-so400m-patch14-384`](https://huggingface.co/google/siglip2-so400m-patch14-384) (1152-dim) | Image-to-3D similarity and multilingual text-to-image matching over 512px renders |
 | **Lexical Search** | `BM25Okapi` (`rank-bm25`) | Exact matching on botanical names, taxonomy (`domain`, `family`, `subject`), and style tags |
-| **Vector Store & Fusion** | Local [Qdrant](https://qdrant.tech/) + Reciprocal Rank Fusion (RRF) | Multi-vector storage (`text` + `vision`) with metadata filtering (`semantic_score`, `split`, `domain`) |
+| **Vector Store & Fusion** | Lock-free SQLite + mmap'd NumPy vectors + Reciprocal Rank Fusion (RRF) | Multi-process concurrent retrieval (`text` + `vision`) with metadata filtering (`semantic_score`, `split`, `domain`) |
 | **Code Generation** | [Ollama](https://ollama.com/) (e.g. `gemma4:12b`, `qwen2.5vl:7b`) | Generates executable `sand3d` Python programs from retrieved examples + API summary |
 
 ## Hardware Requirements
