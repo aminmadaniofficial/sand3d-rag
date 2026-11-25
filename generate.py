@@ -2,11 +2,13 @@
 
 import argparse
 import base64
+import gc
 import html
 import re
 from pathlib import Path
 
 import httpx
+import torch
 
 from config import API_CACHE_PATH, OUTPUT_DIR, STORAGE_DIR
 from retriever import Sand3DRetriever
@@ -124,6 +126,10 @@ def main() -> None:
         )
     finally:
         retriever.close()
+        del retriever
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
     print("Retrieved examples:")
     for i, h in enumerate(hits, start=1):
