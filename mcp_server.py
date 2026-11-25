@@ -44,7 +44,12 @@ apps.add_html_resource(
     name="Sand3D RAG Explorer",
     title="Sand3D Nature Hybrid RAG Explorer",
     description="Interactive visual & code explorer for Sandflow/sand3d-nature assets.",
-    csp=ResourceCsp(),
+    csp=ResourceCsp(
+        resource_domains=[
+            "https://fonts.googleapis.com",
+            "https://fonts.gstatic.com",
+        ]
+    ),
     prefers_border=True,
 )
 
@@ -266,8 +271,51 @@ def search_sand3d_assets(
     resource_uri=EXPLORER_URI,
     visibility=["model", "app"],
     meta=AUX_PANE_META,
-    title="Generate Sand3D Program",
-    description="Retrieve matching sand3d examples and synthesize a new sand3d Python script via local Ollama.",
+    title="Save & Validate Sand3D Program",
+    description=(
+        "Validate Python syntax of a sand3d script written by the host AI agent, "
+        "save it to outputs/, and display it in the Sand3D Explorer UI."
+    ),
+)
+def save_sand3d_program(
+    code: str,
+    output_filename: str = "agent_generated.py",
+) -> CallToolResult:
+    """Validate and save a sand3d Python script synthesized by the host AI agent."""
+    safe_name = Path(output_filename).name or "agent_generated.py"
+    if not safe_name.endswith(".py"):
+        safe_name += ".py"
+
+    clean_code = code.strip()
+    syntax_valid = True
+    syntax_error = None
+    try:
+        ast.parse(clean_code)
+    except SyntaxError as exc:
+        syntax_valid = False
+        syntax_error = str(exc)
+
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = OUTPUT_DIR / safe_name
+    out_path.write_text(clean_code + "\n", encoding="utf-8")
+
+    payload = {
+        "saved_path": str(out_path),
+        "syntax_valid": syntax_valid,
+        "syntax_error": syntax_error,
+        "code": clean_code,
+    }
+    return CallToolResult(
+        content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))],
+        structured_content=payload,
+    )
+
+
+@apps.tool(
+    resource_uri=EXPLORER_URI,
+    visibility=["app"],
+    title="Generate Sand3D Program (Local Ollama Fallback)",
+    description="App-only optional fallback to draft a sand3d Python script using local Ollama.",
 )
 def generate_sand3d_program(
     prompt: str,
@@ -341,9 +389,9 @@ mcp = MCPServer(
     "sand3d-rag",
     instructions=(
         "Hybrid Multimodal RAG for Sandflow/sand3d-nature (10,057 procedural 3D Python programs). "
-        "Use open_sand3d_explorer or search_sand3d_assets with English/Persian queries or image paths "
-        "to retrieve real sand3d reference scripts, get_sand3d_api_reference for the sand3d API summary, "
-        "or generate_sand3d_program to synthesize a new script via local Ollama."
+        "When asked to create or remix a 3D asset, retrieve examples with search_sand3d_assets and "
+        "signatures with get_sand3d_api_reference, write the sand3d Python code yourself, and validate/save "
+        "it with save_sand3d_program so it renders in the Sand3D Explorer pane."
     ),
     extensions=[apps],
 )
