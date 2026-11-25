@@ -12,12 +12,14 @@ Instead of fine-tuning an LLM from scratch, this project indexes prompts, taxono
 | **Vision & Cross-Modal Embedding** | [`google/siglip2-so400m-patch14-384`](https://huggingface.co/google/siglip2-so400m-patch14-384) (1152-dim) | Image-to-3D similarity and multilingual text-to-image matching over 512px renders |
 | **Lexical Search** | `BM25Okapi` (`rank-bm25`) | Exact matching on botanical names, taxonomy (`domain`, `family`, `subject`), and style tags |
 | **Vector Store & Fusion** | Lock-free SQLite + mmap'd NumPy vectors + Reciprocal Rank Fusion (RRF) | Multi-process concurrent retrieval (`text` + `vision`) with metadata filtering (`semantic_score`, `split`, `domain`) |
-| **Code Generation** | [Ollama](https://ollama.com/) (e.g. `gemma4:12b`, `qwen2.5vl:7b`) | Generates executable `sand3d` Python programs from retrieved examples + API summary |
+| **Code Generation** | Any MCP host agent (or [Ollama](https://ollama.com/) via CLI `generate.py`) | Host agent retrieves examples + API summary and synthesizes `sand3d` Python programs |
 
-## Hardware Requirements
+## Hardware & Platform Support
 
-- **Indexing (one-time):** Tested for a single **12 GB VRAM GPU** (e.g., NVIDIA RTX 3060 12GB). Text and vision encoders are loaded sequentially so peak VRAM stays around ~4–5 GB.
-- **Disk space:** ~1.6 GB for dataset Parquet/cache + ~6.9 GB for embedding weights (`bge-m3` 2.32 GB + `siglip2-so400m-patch14-384` 4.58 GB) + local Qdrant index.
+- **Cross-platform:** Automatically selects NVIDIA **CUDA**, Apple Silicon **MPS**, or **CPU** (override via `SAND3D_DEVICE=cpu` etc.).
+- **Indexing (one-time):** Fits comfortably on a **12 GB VRAM GPU** (text and vision encoders load sequentially; peak VRAM ~4–5 GB) or runs on CPU.
+- **Disk space:** ~1.6 GB for dataset Parquet/cache + ~6.9 GB for embedding weights (`bge-m3` 2.32 GB + `siglip2-so400m-patch14-384` 4.58 GB) + ~182 MB local index (`storage/`).
+- **Configuration:** See [`.env.example`](.env.example) for optional environment variables (`OLLAMA_URL`, `OLLAMA_MODEL`, `SAND3D_DEVICE`, `SAND3D_RAG_STORAGE`, etc.).
 
 ## Setup
 
@@ -66,14 +68,14 @@ python retriever.py --image path/to/reference.png --top-k 5
 python retriever.py --image path/to/reference.png --text "more moss and thicker trunk" --top-k 5
 ```
 
-### 3. Generate a New `sand3d` Program (RAG + Ollama)
+### 3. Generate a New `sand3d` Program (Standalone CLI via Ollama)
 
-Make sure [Ollama](https://ollama.com/) is running locally with a coding/VLM model:
+If you want to run generation locally without an MCP host agent, start [Ollama](https://ollama.com/) (e.g., `ollama pull qwen2.5-coder:7b`) and run:
 
 ```bash
 python generate.py \
   --text "pine tree covered in moss growing on a mossy boulder" \
-  --model gemma4:12b \
+  --model qwen2.5-coder:7b \
   --out pine_boulder.py
 ```
 

@@ -32,8 +32,11 @@ class RetrievalHit:
 
 
 def _pick_device(preferred: str | None = None, min_free_gb: float = 3.5) -> str:
-    if preferred:
-        return preferred
+    import os
+
+    chosen = preferred or os.environ.get("SAND3D_DEVICE", "auto")
+    if chosen != "auto":
+        return chosen
     if torch.cuda.is_available():
         free_bytes, _ = torch.cuda.mem_get_info()
         if free_bytes >= min_free_gb * (1024**3):
@@ -43,6 +46,8 @@ def _pick_device(preferred: str | None = None, min_free_gb: float = 3.5) -> str:
             "running query embeddings on CPU.",
             file=sys.stderr,
         )
+    if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():
+        return "mps"
     return "cpu"
 
 

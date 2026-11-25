@@ -17,7 +17,14 @@ from mcp.server.mcpserver import MCPServer
 from mcp.server.mcpserver.context import Context
 from mcp.types import CallToolResult, TextContent
 
-from config import ASSETS_DB_PATH, COLLECTION_NAME, DATASET_REPO, OUTPUT_DIR, PROJECT_DIR
+from config import (
+    ASSETS_DB_PATH,
+    COLLECTION_NAME,
+    DATASET_REPO,
+    DEFAULT_OLLAMA_MODEL,
+    OUTPUT_DIR,
+    PROJECT_DIR,
+)
 
 EXPLORER_URI = "ui://sand3d-rag/explorer.html"
 EXPLORER_HTML_PATH = PROJECT_DIR / "ui" / "explorer.html"
@@ -321,10 +328,11 @@ def generate_sand3d_program(
     prompt: str,
     image_path: str | None = None,
     top_k: int = 3,
-    model: str = "gemma4:12b",
+    model: str | None = None,
     output_filename: str = "mcp_generated.py",
 ) -> CallToolResult:
     """Retrieve matching sand3d examples and synthesize a new sand3d Python script via local Ollama."""
+    chosen_model = model or DEFAULT_OLLAMA_MODEL
     safe_name = Path(output_filename).name or "mcp_generated.py"
     if not safe_name.endswith(".py"):
         safe_name += ".py"
@@ -350,7 +358,7 @@ def generate_sand3d_program(
             api_summary = get_sand3d_api_summary()
             sys_prompt, usr_prompt = build_generation_prompt(prompt, hits, api_summary)
             raw = call_ollama(
-                model=model,
+                model=chosen_model,
                 system_prompt=sys_prompt,
                 user_message=usr_prompt,
                 image_path=image_path,

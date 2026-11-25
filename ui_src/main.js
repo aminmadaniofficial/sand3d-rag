@@ -352,7 +352,6 @@ async function runLocalOllamaDraft(item) {
       arguments: {
         prompt,
         top_k: 3,
-        model: "gemma4:12b",
         output_filename: "ollama_draft.py",
       },
     });

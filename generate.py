@@ -11,7 +11,13 @@ from pathlib import Path
 import httpx
 import torch
 
-from config import API_CACHE_PATH, OUTPUT_DIR, STORAGE_DIR
+from config import (
+    API_CACHE_PATH,
+    DEFAULT_OLLAMA_MODEL,
+    DEFAULT_OLLAMA_URL,
+    OUTPUT_DIR,
+    STORAGE_DIR,
+)
 from retriever import Sand3DRetriever
 
 SAND3D_API_URL = "https://sand3d.sandflow.ai/api.html"
@@ -75,11 +81,11 @@ def build_generation_prompt(
 
 
 def call_ollama(
-    model: str,
-    system_prompt: str,
-    user_message: str,
+    model: str = DEFAULT_OLLAMA_MODEL,
+    system_prompt: str = "",
+    user_message: str = "",
     image_path: str | None = None,
-    ollama_url: str = "http://127.0.0.1:11434",
+    ollama_url: str = DEFAULT_OLLAMA_URL,
 ) -> str:
     msg: dict = {"role": "user", "content": user_message}
     if image_path:
@@ -95,7 +101,8 @@ def call_ollama(
         "stream": False,
         "options": {"temperature": 0.3, "num_ctx": 24576, "num_predict": 4096},
     }
-    with httpx.Client(trust_env=False, timeout=300.0) as client:
+    is_local = "127.0.0.1" in ollama_url or "localhost" in ollama_url
+    with httpx.Client(trust_env=not is_local, timeout=300.0) as client:
         resp = client.post(f"{ollama_url}/api/chat", json=payload)
     resp.raise_for_status()
     data = resp.json()
@@ -118,7 +125,12 @@ def main() -> None:
     parser.add_argument("--text", type=str, required=True, help="Persian or English prompt")
     parser.add_argument("--image", type=str, default=None, help="Optional reference image")
     parser.add_argument("--top-k", type=int, default=3, help="Number of RAG examples")
-    parser.add_argument("--model", type=str, default="gemma4:12b", help="Ollama model name")
+    parser.add_argument(
+        "--model", type=str, default=DEFAULT_OLLAMA_MODEL, help="Ollama model name"
+    )
+    parser.add_argument(
+        "--ollama-url", type=str, default=DEFAULT_OLLAMA_URL, help="Ollama base URL"
+    )
     parser.add_argument("--out", type=str, default="generated_asset.py", help="Output filename")
     args = parser.parse_args()
 
@@ -147,6 +159,7 @@ def main() -> None:
         system_prompt=sys_prompt,
         user_message=usr_prompt,
         image_path=args.image,
+        ollama_url=args.ollama_url,
     )
     code = extract_python_code(raw_output)
 
