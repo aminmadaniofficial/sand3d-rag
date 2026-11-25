@@ -22,7 +22,7 @@ const inspectorTitle = document.getElementById("inspector-title");
 const syntaxBadge = document.getElementById("syntax-badge");
 const inspectorBody = document.getElementById("inspector-body");
 
-const app = new App({ name: "sand3d-rag-explorer", version: "1.1.0" }, {});
+const app = new App({ name: "sand3d-rag-explorer", version: "1.2.0" }, {});
 
 function escapeHtml(str) {
   return String(str || "")
@@ -30,6 +30,21 @@ function escapeHtml(str) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function highlightPython(code) {
+  const escaped = escapeHtml(code || "");
+  const tokenRe =
+    /(#[^\n]*)|(&quot;(?:\\.|[^&]|&(?!quot;))*?&quot;|&#39;.*?&#39;|'(?:\\.|[^'\\])*')|\b(import|from|as|def|return|for|in|if|elif|else|with|try|except|raise|True|False|None|and|or|not|pass|lambda)\b|\b(s3d\.[A-Za-z_]\w*)\b|\b(\d+(?:\.\d+)?)\b/g;
+
+  return escaped.replace(tokenRe, (m, comment, str, kw, s3dCall, num) => {
+    if (comment) return `<span class="tok-com">${comment}</span>`;
+    if (str) return `<span class="tok-str">${str}</span>`;
+    if (kw) return `<span class="tok-kw">${kw}</span>`;
+    if (s3dCall) return `<span class="tok-api">${s3dCall}</span>`;
+    if (num) return `<span class="tok-num">${num}</span>`;
+    return m;
+  });
 }
 
 function applyHostContext(ctx) {
@@ -47,35 +62,41 @@ function applyHostContext(ctx) {
   }
 }
 
+function setStatus(text, tone = "neutral") {
+  statusEl.textContent = text;
+  statusEl.dataset.tone = tone;
+}
+
 function renderResults() {
-  resultsCount.textContent = `${state.items.length} items`;
+  resultsCount.textContent = `${state.items.length} assets`;
   if (!state.items.length) {
-    resultsList.innerHTML = `<div class="empty-state">No matching assets found.</div>`;
+    resultsList.innerHTML = `<div class="empty-state">No matching 3D assets found. Try another Persian or English query.</div>`;
     return;
   }
+
   resultsList.innerHTML = state.items
     .map((item, idx) => {
       const active = idx === state.selectedIndex ? "active" : "";
       const thumb = item.thumbnail_data_uri
-        ? `<img src="${item.thumbnail_data_uri}" alt="asset render" />`
+        ? `<img src="${item.thumbnail_data_uri}" alt="${escapeHtml(item.subject || "3D render")}" />`
         : `<div class="thumb-placeholder">${escapeHtml(item.family || "3D")}</div>`;
       const ranksText = item.ranks
         ? Object.entries(item.ranks)
             .map(([k, v]) => `${k}:#${v}`)
             .join(" · ")
-        : "featured";
+        : "curated";
       const scoreBadge =
         item.rrf_score !== undefined && item.rrf_score !== null
-          ? `<span class="tag tag-score">RRF ${Number(item.rrf_score).toFixed(4)}</span>`
-          : `<span class="tag tag-score">CURATED</span>`;
+          ? `<span class="tag tag-accent">RRF ${Number(item.rrf_score).toFixed(4)}</span>`
+          : `<span class="tag tag-accent">score ${Number(item.semantic_score || 0).toFixed(2)}</span>`;
+
       return `
         <button type="button" class="card ${active}" data-idx="${idx}">
           <div class="thumb-wrap">${thumb}</div>
-          <div>
+          <div class="card-body">
             <div class="card-meta">
               ${scoreBadge}
               <span class="tag">${escapeHtml(item.family || "")}</span>
-              <span class="tag">score ${Number(item.semantic_score || 0).toFixed(2)}</span>
             </div>
             <div class="card-prompt" dir="auto">${escapeHtml(item.prompt)}</div>
             <div class="card-ranks">${escapeHtml(ranksText)} · ${Number(item.triangles || 0).toLocaleString()} tris</div>
@@ -101,7 +122,7 @@ function renderResults() {
 }
 
 async function fetchFullAssetDetails(item) {
-  statusEl.textContent = `LOADING #${item.id}...`;
+  setStatus(`LOADING #${item.id}...`);
   try {
     const res = await app.callServerTool({
       name: "app_get_asset_details",
@@ -114,27 +135,44 @@ async function fetchFullAssetDetails(item) {
       renderInspector();
       renderResults();
     }
-    statusEl.textContent = "READY";
+    setStatus("READY", "ok");
   } catch (err) {
-    statusEl.textContent = `DETAIL ERR: ${err.message || err}`;
+    setStatus(`ERR: ${err.message || err}`, "err");
   }
+}
+
+function buildAgentPromptText(item) {
+  const userNote = queryInput.value.trim();
+  const taskLine = userNote
+    ? `Create a new sand3d Python script for: "${userNote}", using reference asset #${item.id} (${item.entry}) below.`
+    : `Write a new sand3d Python script inspired by reference asset #${item.id} (${item.entry}) below.`;
+  return (
+    `${taskLine}\n` +
+    `Use \`get_sand3d_api_reference\` if you need extra API signatures, write the Python code yourself, ` +
+    `and validate/save it with \`save_sand3d_program\`.\n\n` +
+    `Prompt: ${item.prompt}\n` +
+    `Taxonomy: ${item.domain} / ${item.family} / ${item.subject}\n\n` +
+    "```python\n" +
+    (item.program || "") +
+    "\n```"
+  );
 }
 
 function renderInspector() {
   if (state.generated) {
     const gen = state.generated;
-    inspectorTitle.textContent = `Generated: ${gen.saved_path || "script.py"}`;
+    inspectorTitle.textContent = gen.saved_path ? `Saved: ${gen.saved_path}` : "Generated Script";
     syntaxBadge.innerHTML = gen.syntax_valid
-      ? `<span class="badge-ok">AST VALID</span>`
-      : `<span class="badge-err">SYNTAX ERROR</span>`;
+      ? `<span class="pill pill-ok">AST VALID</span>`
+      : `<span class="pill pill-err">SYNTAX ERROR</span>`;
     inspectorBody.innerHTML = `
       <div class="actions-row">
-        <button type="button" class="btn" id="copy-code-btn">COPY CODE</button>
-        <button type="button" class="btn" id="back-ref-btn">BACK TO SELECTED REF</button>
+        <button type="button" class="btn btn-primary" id="copy-code-btn">Copy Python Code</button>
+        <button type="button" class="btn" id="back-ref-btn">Back to Reference</button>
       </div>
-      <pre class="code-box"><code>${escapeHtml(gen.code || "")}</code></pre>
+      <pre class="code-box"><code>${highlightPython(gen.code || "")}</code></pre>
     `;
-    document.getElementById("copy-code-btn").onclick = () => copyText(gen.code || "");
+    document.getElementById("copy-code-btn").onclick = () => copyText(gen.code || "", "COPIED CODE");
     document.getElementById("back-ref-btn").onclick = () => {
       state.generated = null;
       renderInspector();
@@ -146,74 +184,95 @@ function renderInspector() {
   if (!item) {
     inspectorTitle.textContent = "Program Inspector";
     syntaxBadge.textContent = "";
-    inspectorBody.innerHTML = `<div class="empty-state">Select an asset card to inspect its sand3d Python script.</div>`;
+    inspectorBody.innerHTML = `<div class="empty-state">Select a 3D asset card on the left to inspect its procedural sand3d script or send it to your AI agent.</div>`;
     return;
   }
 
+  const canMessage = Boolean(state.hostCaps && state.hostCaps.message);
   const canAttach = Boolean(state.hostCaps && state.hostCaps.updateModelContext);
-  const attachBtnHtml = canAttach
-    ? `<button type="button" class="btn" id="attach-ctx-btn">ATTACH TO CHAT</button>`
+
+  const primaryAction = canMessage
+    ? `<button type="button" class="btn btn-primary" id="agent-remix-btn">Remix with Agent</button>`
+    : `<button type="button" class="btn btn-primary" id="copy-agent-prompt-btn">Copy Prompt + Code for Agent</button>`;
+
+  const attachBtn = canAttach
+    ? `<button type="button" class="btn" id="attach-ctx-btn">Attach to Chat</button>`
     : "";
 
-  inspectorTitle.textContent = `Entry: ${item.entry || "program"}`;
-  syntaxBadge.textContent = `#${item.id}`;
+  inspectorTitle.textContent = item.entry || "sand3d program";
+  syntaxBadge.innerHTML = `<span class="pill">#${item.id} · ${escapeHtml(item.split || "train")}</span>`;
   inspectorBody.innerHTML = `
-    <div class="detail-grid">
+    <div class="prompt-banner" dir="auto">${escapeHtml(item.prompt)}</div>
+    <div class="metrics-strip">
       <div class="metric">
-        <div class="metric-label">Domain</div>
-        <div class="metric-val">${escapeHtml(item.domain)}</div>
+        <span class="metric-label">Domain</span>
+        <span class="metric-val">${escapeHtml(item.domain)}</span>
       </div>
       <div class="metric">
-        <div class="metric-label">Subject</div>
-        <div class="metric-val">${escapeHtml(item.subject)}</div>
+        <span class="metric-label">Family</span>
+        <span class="metric-val">${escapeHtml(item.family)}</span>
       </div>
       <div class="metric">
-        <div class="metric-label">Triangles</div>
-        <div class="metric-val">${Number(item.triangles || 0).toLocaleString()}</div>
+        <span class="metric-label">Subject</span>
+        <span class="metric-val">${escapeHtml(item.subject)}</span>
+      </div>
+      <div class="metric">
+        <span class="metric-label">Triangles</span>
+        <span class="metric-val">${Number(item.triangles || 0).toLocaleString()}</span>
       </div>
     </div>
     <div class="actions-row">
-      <button type="button" class="btn" id="copy-code-btn">COPY CODE</button>
-      ${attachBtnHtml}
-      <button type="button" class="btn btn-primary" id="gen-ollama-btn">GENERATE NEW WITH OLLAMA</button>
+      ${primaryAction}
+      ${attachBtn}
+      <button type="button" class="btn" id="copy-code-btn">Copy Code</button>
+      <button type="button" class="btn btn-subtle" id="gen-ollama-btn" title="Optional offline draft using local Ollama">Local Ollama Draft</button>
     </div>
-    <pre class="code-box"><code>${escapeHtml(item.program || "Loading full Python program...")}</code></pre>
+    <pre class="code-box"><code>${highlightPython(item.program || "# Loading full Python program...")}</code></pre>
   `;
-  document.getElementById("copy-code-btn").onclick = () => copyText(item.program || "");
-  document.getElementById("gen-ollama-btn").onclick = () => runGenerate(item);
+
+  document.getElementById("copy-code-btn").onclick = () => copyText(item.program || "", "COPIED CODE");
+  document.getElementById("gen-ollama-btn").onclick = () => runLocalOllamaDraft(item);
+
+  if (canMessage) {
+    document.getElementById("agent-remix-btn").onclick = () => sendToAgent(item);
+  } else {
+    document.getElementById("copy-agent-prompt-btn").onclick = () =>
+      copyText(buildAgentPromptText(item), "COPIED PROMPT FOR AGENT");
+  }
   if (canAttach) {
     document.getElementById("attach-ctx-btn").onclick = () => attachToChat(item);
   }
 }
 
-async function copyText(text) {
+async function copyText(text, okLabel = "COPIED") {
   try {
     await navigator.clipboard.writeText(text);
-    statusEl.textContent = "COPIED TO CLIPBOARD";
+    setStatus(okLabel, "ok");
   } catch {
-    statusEl.textContent = "COPY FAILED IN SANDBOX";
+    setStatus("COPY BLOCKED BY SANDBOX", "err");
+  }
+}
+
+async function sendToAgent(item) {
+  setStatus("SENDING TO AGENT...");
+  try {
+    await app.sendMessage({
+      content: [{ type: "text", text: buildAgentPromptText(item) }],
+    });
+    setStatus("SENT TO AGENT", "ok");
+  } catch (err) {
+    setStatus(`SEND ERR: ${err.message || err}`, "err");
   }
 }
 
 async function attachToChat(item) {
   try {
     await app.updateModelContext({
-      content: [
-        {
-          type: "text",
-          text:
-            `Reference sand3d asset #${item.id} (${item.domain}/${item.family}/${item.subject}):\n` +
-            `Prompt: ${item.prompt}\n` +
-            `Entry: ${item.entry}\n\n` +
-            "```python\n" +
-            (item.program || "") +
-            "\n```",
-        },
-      ],
+      content: [{ type: "text", text: buildAgentPromptText(item) }],
     });
-    statusEl.textContent = "ATTACHED TO NEXT MESSAGE";
+    setStatus("ATTACHED TO NEXT MESSAGE", "ok");
   } catch (err) {
-    statusEl.textContent = `ATTACH ERR: ${err.message || err}`;
+    setStatus(`ATTACH ERR: ${err.message || err}`, "err");
   }
 }
 
@@ -262,7 +321,7 @@ async function runSearch(e) {
   const query = queryInput.value.trim();
   if (!query) return;
   searchBtn.disabled = true;
-  statusEl.textContent = "SEARCHING...";
+  setStatus("SEARCHING...");
   try {
     const res = await app.callServerTool({
       name: "search_sand3d_assets",
@@ -274,19 +333,19 @@ async function runSearch(e) {
       },
     });
     applyToolResultPayload(res);
-    statusEl.textContent = "READY";
+    setStatus("READY", "ok");
   } catch (err) {
-    statusEl.textContent = `ERR: ${err.message || err}`;
+    setStatus(`ERR: ${err.message || err}`, "err");
   } finally {
     searchBtn.disabled = false;
   }
 }
 
-async function runGenerate(item) {
+async function runLocalOllamaDraft(item) {
   const prompt = queryInput.value.trim() || item.prompt || "mossy rock";
   const btn = document.getElementById("gen-ollama-btn");
   if (btn) btn.disabled = true;
-  statusEl.textContent = "GENERATING VIA OLLAMA...";
+  setStatus("DRAFTING VIA OLLAMA...");
   try {
     const res = await app.callServerTool({
       name: "generate_sand3d_program",
@@ -294,13 +353,13 @@ async function runGenerate(item) {
         prompt,
         top_k: 3,
         model: "gemma4:12b",
-        output_filename: "mcp_app_generated.py",
+        output_filename: "ollama_draft.py",
       },
     });
     applyToolResultPayload(res);
-    statusEl.textContent = "GENERATED";
+    setStatus("OLLAMA DRAFT READY", "ok");
   } catch (err) {
-    statusEl.textContent = `GEN ERR: ${err.message || err}`;
+    setStatus(`OLLAMA ERR: ${err.message || err}`, "err");
   } finally {
     if (btn) btn.disabled = false;
   }
@@ -311,16 +370,16 @@ app.ontoolinput = ({ arguments: args }) => {
   if (args && args.query) {
     queryInput.value = args.query;
   }
-  statusEl.textContent = "RUNNING TOOL...";
+  setStatus("RUNNING TOOL...");
 };
 
 app.ontoolresult = (result) => {
   applyToolResultPayload(result);
-  statusEl.textContent = "READY";
+  setStatus("READY", "ok");
 };
 
 app.ontoolcancelled = () => {
-  statusEl.textContent = "CANCELLED";
+  setStatus("CANCELLED");
 };
 
 app.onhostcontextchanged = (ctx) => {
@@ -334,8 +393,9 @@ app
   .then(() => {
     state.hostCaps = app.getHostCapabilities() || {};
     applyHostContext(app.getHostContext());
-    statusEl.textContent = "MCP APP CONNECTED";
+    setStatus("CONNECTED", "ok");
+    if (state.selectedIndex >= 0) renderInspector();
   })
   .catch(() => {
-    statusEl.textContent = "STANDALONE PREVIEW";
+    setStatus("STANDALONE");
   });

@@ -18,53 +18,83 @@ const template = `<!doctype html>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sand3D Nature — Hybrid RAG Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&family=Vazirmatn:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
   <style>
     :root {
-      --bg: var(--color-background-primary, #0d1117);
-      --panel: var(--color-background-secondary, #161b22);
-      --panel-alt: var(--color-background-tertiary, #1c222b);
-      --border: var(--color-border-primary, #2a313c);
-      --ink: var(--color-text-primary, #e6edf3);
-      --muted: var(--color-text-secondary, #8b949e);
+      --bg: var(--color-background-primary, #0b0e14);
+      --panel: var(--color-background-secondary, #111620);
+      --panel-alt: var(--color-background-tertiary, #171e2b);
+      --border: var(--color-border-primary, rgba(255, 255, 255, 0.09));
+      --border-strong: rgba(255, 255, 255, 0.16);
+      --ink: var(--color-text-primary, #eef2f7);
+      --muted: var(--color-text-secondary, #8d99ae);
       --accent: #f97316;
-      --accent-ink: #0d1117;
-      --ok: var(--color-text-success, #3fb950);
-      --err: var(--color-text-danger, #f85149);
-      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-      --sans: var(--font-sans, "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+      --accent-soft: rgba(249, 115, 22, 0.12);
+      --accent-ink: #0b0e14;
+      --ok: var(--color-text-success, #34d399);
+      --err: var(--color-text-danger, #f87171);
+      --tok-kw: #fb923c;
+      --tok-str: #86efac;
+      --tok-com: #64748b;
+      --tok-api: #93c5fd;
+      --tok-num: #fcd34d;
+      --sans: "Space Grotesk", "Vazirmatn", "Inter Display", "Inter", "Adwaita Sans", system-ui, -apple-system, sans-serif;
+      --mono: "JetBrains Mono", "JetBrainsMono Nerd Font", "FiraCode Nerd Font Mono", "Adwaita Mono", "Liberation Mono", monospace;
     }
 
     :root[data-theme="light"] {
-      --bg: var(--color-background-primary, #f6f8fa);
+      --bg: var(--color-background-primary, #f6f8fb);
       --panel: var(--color-background-secondary, #ffffff);
-      --panel-alt: var(--color-background-tertiary, #f0f3f6);
-      --border: var(--color-border-primary, #d0d7de);
-      --ink: var(--color-text-primary, #1f2328);
-      --muted: var(--color-text-secondary, #656d76);
+      --panel-alt: var(--color-background-tertiary, #eef2f7);
+      --border: var(--color-border-primary, rgba(15, 23, 42, 0.1));
+      --border-strong: rgba(15, 23, 42, 0.2);
+      --ink: var(--color-text-primary, #0f172a);
+      --muted: var(--color-text-secondary, #475569);
       --accent: #ea580c;
+      --accent-soft: rgba(234, 88, 12, 0.1);
       --accent-ink: #ffffff;
-      --ok: var(--color-text-success, #1a7f37);
-      --err: var(--color-text-danger, #cf222e);
+      --ok: var(--color-text-success, #059669);
+      --err: var(--color-text-danger, #dc2626);
+      --tok-kw: #c2410c;
+      --tok-str: #15803d;
+      --tok-com: #64748b;
+      --tok-api: #1d4ed8;
+      --tok-num: #b45309;
     }
 
     * { box-sizing: border-box; }
 
-    body {
+    html, body {
       margin: 0;
-      padding: 12px;
+      padding: 0;
+      max-width: 100%;
+      overflow-x: hidden;
       background: var(--bg);
       color: var(--ink);
       font-family: var(--sans);
-      font-size: 13px;
-      line-height: 1.45;
+      font-size: 13.5px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      padding: 14px;
     }
 
     .shell {
-      display: grid;
-      grid-template-rows: auto auto 1fr;
-      gap: 10px;
-      max-width: 1120px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      max-width: 1240px;
       margin: 0 auto;
+      min-width: 0;
     }
 
     .topbar {
@@ -72,59 +102,101 @@ const template = `<!doctype html>
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      padding: 8px 12px;
+      padding: 10px 14px;
       background: var(--panel);
       border: 1px solid var(--border);
+      border-radius: 8px;
     }
 
     .brand {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-family: var(--mono);
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.03em;
-      text-transform: uppercase;
+      gap: 10px;
+      min-width: 0;
     }
 
     .brand-mark {
-      width: 8px;
-      height: 8px;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
       background: var(--accent);
-      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .brand-title {
+      font-weight: 600;
+      font-size: 14px;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .brand-sub {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400;
     }
 
     .status-pill {
       font-family: var(--mono);
       font-size: 11px;
+      font-weight: 500;
       color: var(--muted);
       border: 1px solid var(--border);
-      padding: 2px 8px;
+      border-radius: 999px;
+      padding: 3px 10px;
       background: var(--panel-alt);
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .status-pill[data-tone="ok"] {
+      color: var(--ok);
+      border-color: color-mix(in srgb, var(--ok) 35%, transparent);
+    }
+
+    .status-pill[data-tone="err"] {
+      color: var(--err);
+      border-color: color-mix(in srgb, var(--err) 35%, transparent);
     }
 
     .controls {
-      display: grid;
-      grid-template-columns: 1fr auto auto auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
       gap: 8px;
-      padding: 10px;
+      padding: 10px 12px;
       background: var(--panel);
       border: 1px solid var(--border);
+      border-radius: 8px;
     }
 
     input, select, button {
       font-family: inherit;
       font-size: 13px;
-      border-radius: 2px;
+      border-radius: 6px;
     }
 
-    input[type="text"], select {
+    input[type="text"] {
+      flex: 1 1 260px;
+      min-width: 0;
       background: var(--bg);
       color: var(--ink);
       border: 1px solid var(--border);
-      padding: 7px 10px;
+      padding: 8px 12px;
       outline: none;
+      transition: border-color 140ms ease;
+    }
+
+    select {
+      background: var(--bg);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      padding: 8px 10px;
+      outline: none;
+      font-family: var(--mono);
+      font-size: 12px;
     }
 
     input[type="text"]:focus, select:focus {
@@ -135,14 +207,16 @@ const template = `<!doctype html>
       background: var(--panel-alt);
       color: var(--ink);
       border: 1px solid var(--border);
-      padding: 7px 12px;
+      padding: 8px 13px;
       cursor: pointer;
-      font-family: var(--mono);
-      font-size: 12px;
+      font-family: var(--sans);
+      font-size: 12.5px;
       font-weight: 600;
+      white-space: nowrap;
+      transition: border-color 140ms ease, opacity 140ms ease, background 140ms ease;
     }
 
-    .btn:hover { border-color: var(--ink); }
+    .btn:hover { border-color: var(--border-strong); }
 
     .btn-primary {
       background: var(--accent);
@@ -151,63 +225,81 @@ const template = `<!doctype html>
     }
 
     .btn-primary:hover { opacity: 0.92; }
+
+    .btn-subtle {
+      background: transparent;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .btn-subtle:hover { color: var(--ink); }
     .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
     .workspace {
       display: grid;
-      grid-template-columns: 1.05fr 1fr;
-      gap: 10px;
-      min-height: 440px;
+      grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      min-width: 0;
     }
 
-    @media (max-width: 780px) {
-      .controls { grid-template-columns: 1fr 1fr; }
-      .controls input[type="text"] { grid-column: 1 / -1; }
-      .workspace { grid-template-columns: 1fr; }
+    @media (max-width: 760px) {
+      .workspace {
+        grid-template-columns: minmax(0, 1fr);
+      }
     }
 
     .pane {
       background: var(--panel);
       border: 1px solid var(--border);
+      border-radius: 8px;
       display: flex;
       flex-direction: column;
-      min-height: 0;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .pane-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 8px 12px;
+      gap: 8px;
+      padding: 9px 13px;
       border-bottom: 1px solid var(--border);
       background: var(--panel-alt);
       font-family: var(--mono);
       font-size: 11px;
+      font-weight: 500;
       color: var(--muted);
+      letter-spacing: 0.03em;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
     }
 
     .results-list {
       overflow-y: auto;
-      max-height: 520px;
+      max-height: 620px;
       display: flex;
       flex-direction: column;
     }
 
     .card {
       display: grid;
-      grid-template-columns: 88px 1fr;
-      gap: 10px;
-      padding: 10px;
+      grid-template-columns: 76px minmax(0, 1fr);
+      gap: 11px;
+      padding: 11px 12px;
+      border: 0;
       border-bottom: 1px solid var(--border);
+      border-left: 3px solid transparent;
+      border-radius: 0;
       cursor: pointer;
       text-align: left;
       background: transparent;
       color: inherit;
-      border-left: 3px solid transparent;
+      width: 100%;
+      transition: background 120ms ease;
     }
 
+    .card:last-child { border-bottom: 0; }
     .card:hover { background: var(--panel-alt); }
     .card.active {
       background: var(--panel-alt);
@@ -215,10 +307,11 @@ const template = `<!doctype html>
     }
 
     .thumb-wrap {
-      width: 88px;
-      height: 88px;
+      width: 76px;
+      height: 76px;
       background: var(--bg);
       border: 1px solid var(--border);
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -241,29 +334,41 @@ const template = `<!doctype html>
       padding: 4px;
     }
 
+    .card-body {
+      min-width: 0;
+    }
+
     .card-meta {
       display: flex;
       flex-wrap: wrap;
-      gap: 6px;
-      margin-bottom: 4px;
+      gap: 5px;
+      margin-bottom: 5px;
       font-family: var(--mono);
-      font-size: 11px;
+      font-size: 10.5px;
+      font-variant-numeric: tabular-nums;
     }
 
     .tag {
       border: 1px solid var(--border);
+      border-radius: 4px;
       padding: 1px 6px;
       color: var(--muted);
       background: var(--bg);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
-    .tag-score {
+    .tag-accent {
       color: var(--accent);
-      border-color: var(--accent);
+      background: var(--accent-soft);
+      border-color: color-mix(in srgb, var(--accent) 40%, transparent);
     }
 
     .card-prompt {
       font-size: 12.5px;
+      font-weight: 500;
       color: var(--ink);
       display: -webkit-box;
       -webkit-line-clamp: 2;
@@ -276,42 +381,65 @@ const template = `<!doctype html>
       font-family: var(--mono);
       font-size: 10.5px;
       color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .inspector-body {
-      padding: 10px 12px;
+      padding: 12px 14px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
-      flex: 1;
-      min-height: 0;
+      gap: 11px;
+      min-width: 0;
     }
 
-    .detail-grid {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 6px;
-      font-family: var(--mono);
-      font-size: 11px;
+    .prompt-banner {
+      padding: 10px 12px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .metrics-strip {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-width: 0;
     }
 
     .metric {
+      flex: 1 1 130px;
+      min-width: 0;
       border: 1px solid var(--border);
+      border-radius: 6px;
       background: var(--bg);
-      padding: 6px 8px;
+      padding: 7px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
     }
 
     .metric-label {
+      font-family: var(--mono);
       color: var(--muted);
       font-size: 10px;
       text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .metric-val {
+      font-family: var(--mono);
       color: var(--ink);
+      font-size: 12px;
       font-weight: 600;
-      margin-top: 2px;
-      word-break: break-all;
+      font-variant-numeric: tabular-nums;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .actions-row {
@@ -323,29 +451,44 @@ const template = `<!doctype html>
 
     pre.code-box {
       margin: 0;
-      padding: 10px;
+      padding: 12px 14px;
       background: var(--bg);
       border: 1px solid var(--border);
-      font-family: var(--mono);
-      font-size: 11.5px;
-      line-height: 1.5;
-      overflow: auto;
-      max-height: 360px;
-      white-space: pre;
-      tab-size: 4;
-      flex: 1;
-    }
-
-    .empty-state {
-      padding: 28px 16px;
-      text-align: center;
-      color: var(--muted);
+      border-radius: 6px;
       font-family: var(--mono);
       font-size: 12px;
+      line-height: 1.55;
+      overflow: auto;
+      max-height: 430px;
+      white-space: pre;
+      tab-size: 4;
+      width: 100%;
     }
 
-    .badge-ok { color: var(--ok); }
-    .badge-err { color: var(--err); }
+    .tok-kw { color: var(--tok-kw); font-weight: 500; }
+    .tok-str { color: var(--tok-str); }
+    .tok-com { color: var(--tok-com); font-style: italic; }
+    .tok-api { color: var(--tok-api); }
+    .tok-num { color: var(--tok-num); }
+
+    .empty-state {
+      padding: 32px 18px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .pill {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+
+    .pill-ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+    .pill-err { color: var(--err); border-color: color-mix(in srgb, var(--err) 40%, transparent); }
   </style>
 </head>
 <body>
@@ -353,7 +496,7 @@ const template = `<!doctype html>
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark"></span>
-        <span>SAND3D-RAG // HYBRID MULTIMODAL EXPLORER</span>
+        <span class="brand-title">Sand3D Explorer <span class="brand-sub">// Hybrid Multimodal RAG</span></span>
       </div>
       <div class="status-pill" id="host-status">CONNECTING...</div>
     </header>
@@ -375,17 +518,17 @@ const template = `<!doctype html>
         <option value="8">top 8</option>
         <option value="12">top 12</option>
       </select>
-      <button type="submit" class="btn btn-primary" id="search-btn">SEARCH</button>
+      <button type="submit" class="btn btn-primary" id="search-btn">Search</button>
     </form>
 
     <main class="workspace">
       <section class="pane">
         <div class="pane-head">
-          <span>Retrieved References</span>
-          <span id="results-count">0 items</span>
+          <span>References</span>
+          <span id="results-count">0 assets</span>
         </div>
         <div class="results-list" id="results-list">
-          <div class="empty-state">Waiting for tool result or search query...</div>
+          <div class="empty-state">Loading references...</div>
         </div>
       </section>
 
@@ -395,7 +538,7 @@ const template = `<!doctype html>
           <span id="syntax-badge"></span>
         </div>
         <div class="inspector-body" id="inspector-body">
-          <div class="empty-state">Select an asset card to inspect its sand3d Python script or synthesize a new variation via Ollama.</div>
+          <div class="empty-state">Select a 3D asset card to inspect its procedural sand3d script.</div>
         </div>
       </section>
     </main>
