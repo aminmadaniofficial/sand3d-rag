@@ -83,10 +83,12 @@ Generated scripts are written to `outputs/`.
 
 Expose the hybrid RAG directly to coding agents via [Model Context Protocol](https://modelcontextprotocol.io/) (`mcp_server.py`) with built-in **MCP Apps** (`io.modelcontextprotocol/ui`) interactive UI support (`ui://sand3d-rag/explorer.html`):
 
-- `search_sand3d_assets` — search by Persian/English text, reference image, or both (renders interactive card gallery + code inspector in MCP Apps-capable hosts like Antigravity, and falls back to clean JSON text elsewhere)
-- `get_sand3d_api_reference` — returns the condensed `sand3d` Python API reference
-- `get_index_stats` — returns local Qdrant collection info
-- `generate_sand3d_program` — retrieves references and generates a syntax-checked script via local Ollama (rendered live in the MCP App code inspector)
+- `open_sand3d_explorer` — opens the Sand3D Explorer UI in Antigravity's side pane (`+`) or left sidebar (`global`)
+- `search_sand3d_assets` — search by Persian/English text, reference image, or both (returns `sand3d` reference programs & thumbnails for the host AI agent)
+- `get_sand3d_api_reference` — returns the condensed `sand3d` Python API reference so the host agent writes valid code
+- `save_sand3d_program` — validates Python syntax (`ast.parse`) on code written by the host agent, saves it to `outputs/`, and displays it in the Explorer pane
+- `get_index_stats` — returns local AssetStore stats
+- *(Optional app-only `generate_sand3d_program` fallback for local Ollama drafts when running standalone without a chat conversation)*
 
 Add this entry to your MCP client config (e.g. `mcp_config.json`):
 

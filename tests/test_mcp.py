@@ -36,6 +36,7 @@ class TestMCPServer(unittest.TestCase):
                             "search_sand3d_assets",
                             "get_sand3d_api_reference",
                             "get_index_stats",
+                            "save_sand3d_program",
                             "generate_sand3d_program",
                             "app_get_asset_details",
                         }.issubset(by_name.keys())
@@ -67,6 +68,20 @@ class TestMCPServer(unittest.TestCase):
                     self.assertEqual(
                         app_only_meta.get("ui", {}).get("visibility"), ["app"]
                     )
+                    ollama_meta = by_name["generate_sand3d_program"].meta or {}
+                    self.assertEqual(
+                        ollama_meta.get("ui", {}).get("visibility"), ["app"]
+                    )
+
+                    save_res = await session.call_tool(
+                        "save_sand3d_program",
+                        {
+                            "code": "import sand3d as s3d\ndef build_asset(seed=0):\n    return s3d.box('b', 10, 10, 10)",
+                            "output_filename": "test_saved.py",
+                        },
+                    )
+                    self.assertFalse(save_res.is_error)
+                    self.assertTrue(save_res.structured_content["syntax_valid"])
 
                     resources_res = await session.list_resources()
                     uris = {str(r.uri) for r in resources_res.resources}
@@ -74,7 +89,7 @@ class TestMCPServer(unittest.TestCase):
 
                     ui_res = await session.read_resource(EXPLORER_URI)
                     self.assertEqual(ui_res.contents[0].mime_type, APP_MIME_TYPE)
-                    self.assertIn("SAND3D-RAG", ui_res.contents[0].text)
+                    self.assertIn("Sand3D Explorer", ui_res.contents[0].text)
 
                     # Entrypoint launch with empty '{}' must return default assets quickly
                     open_res = await session.call_tool("open_sand3d_explorer", {})
