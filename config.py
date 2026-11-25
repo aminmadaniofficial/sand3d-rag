@@ -40,3 +40,16 @@ def build_search_document(row: dict) -> str:
 def tokenize_bm25(text: str) -> list[str]:
     """Tokenize text into lowercase alphanumeric/Persian terms for BM25."""
     return [tok.lower() for tok in _TOKEN_RE.findall(text)]
+
+
+def extract_feature_tensor(output):
+    """Extract pooled tensor across transformers output variants."""
+    import torch
+
+    if isinstance(output, torch.Tensor):
+        return output
+    if hasattr(output, "pooler_output") and output.pooler_output is not None:
+        return output.pooler_output
+    if hasattr(output, "last_hidden_state"):
+        return output.last_hidden_state[:, 0]
+    raise TypeError(f"Unsupported feature output type: {type(output)}")

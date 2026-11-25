@@ -26,19 +26,9 @@ from config import (
     VISION_DIM,
     VISION_MODEL_ID,
     build_search_document,
+    extract_feature_tensor,
     tokenize_bm25,
 )
-
-
-def _extract_feature_tensor(output) -> torch.Tensor:
-    """Handle both raw tensor outputs and BaseModelOutput objects across transformers versions."""
-    if isinstance(output, torch.Tensor):
-        return output
-    if hasattr(output, "pooler_output") and output.pooler_output is not None:
-        return output.pooler_output
-    if hasattr(output, "last_hidden_state"):
-        return output.last_hidden_state[:, 0]
-    raise TypeError(f"Unsupported feature output type: {type(output)}")
 
 
 def encode_texts(texts: list[str], device: str, batch_size: int) -> list[list[float]]:
@@ -65,22 +55,24 @@ def encode_texts(texts: list[str], device: str, batch_size: int) -> list[list[fl
     return result
 
 
-def encode_images(images: list, device: str, batch_size: int) -> list[list[float]]:
-    """Encode all 512px render images with SigLIP2-SO400M-384."""
+def encode_images(dataset, device: str, batch_size: int) -> list[list[float]]:
+    """Encode all 512px render images with SigLIP2-SO400M-384 without buffering all PILs in RAM."""
     print(f"[2/4] Loading vision encoder: {VISION_MODEL_ID} on {device}...")
     dtype = torch.float16 if device.startswith("cuda") else torch.float32
     processor = AutoProcessor.from_pretrained(VISION_MODEL_ID)
-    model = AutoModel.from_pretrained(VISION_MODEL_ID, torch_dtype=dtype).to(device)
+    model = AutoModel.from_pretrained(VISION_MODEL_ID, dtype=dtype).to(device)
     model.eval()
 
+    total = len(dataset)
     vectors: list[list[float]] = []
     with torch.inference_mode():
-        for start in tqdm(range(0, len(images), batch_size), desc="Encoding renders"):
-            batch_imgs = [img.convert("RGB") for img in images[start : start + batch_size]]
+        for start in tqdm(range(0, total, batch_size), desc="Encoding renders"):
+            end = min(start + batch_size, total)
+            batch_imgs = [img.convert("RGB") for img in dataset[start:end]["render"]]
             inputs = processor(images=batch_imgs, return_tensors="pt").to(device)
             if "pixel_values" in inputs and dtype == torch.float16:
                 inputs["pixel_values"] = inputs["pixel_values"].to(dtype)
-            feats = _extract_feature_tensor(model.get_image_features(**inputs))
+            feats = extract_feature_tensor(model.get_image_features(**inputs))
             feats = F.normalize(feats.float(), dim=-1)
             vectors.extend(feats.cpu().tolist())
 
@@ -115,8 +107,7 @@ def main() -> None:
     docs = [build_search_document(row) for row in dataset]
     text_vectors = encode_texts(docs, device=device, batch_size=args.text_batch)
 
-    images = [row["render"] for row in dataset]
-    vision_vectors = encode_images(images, device=device, batch_size=args.vision_batch)
+    vision_vectors = encode_images(dataset, device=device, batch_size=args.vision_batch)
 
     print("[3/4] Building BM25 lexical index...")
     tokenized_corpus = [tokenize_bm25(doc) for doc in docs]

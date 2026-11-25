@@ -20,18 +20,9 @@ from config import (
     QDRANT_PATH,
     TEXT_MODEL_ID,
     VISION_MODEL_ID,
+    extract_feature_tensor,
     tokenize_bm25,
 )
-
-
-def _extract_feature_tensor(output) -> torch.Tensor:
-    if isinstance(output, torch.Tensor):
-        return output
-    if hasattr(output, "pooler_output") and output.pooler_output is not None:
-        return output.pooler_output
-    if hasattr(output, "last_hidden_state"):
-        return output.last_hidden_state[:, 0]
-    raise TypeError(f"Unsupported feature output type: {type(output)}")
 
 
 @dataclass
@@ -65,7 +56,7 @@ class Sand3DRetriever:
         if load_vision:
             self.vision_processor = AutoProcessor.from_pretrained(VISION_MODEL_ID)
             self.vision_model = AutoModel.from_pretrained(
-                VISION_MODEL_ID, torch_dtype=self.dtype
+                VISION_MODEL_ID, dtype=self.dtype
             ).to(self.device)
             self.vision_model.eval()
 
@@ -87,7 +78,7 @@ class Sand3DRetriever:
             return_tensors="pt",
         ).to(self.device)
         with torch.inference_mode():
-            feats = _extract_feature_tensor(self.vision_model.get_text_features(**inputs))
+            feats = extract_feature_tensor(self.vision_model.get_text_features(**inputs))
             feats = F.normalize(feats.float(), dim=-1)
         return feats[0].cpu().tolist()
 
@@ -97,7 +88,7 @@ class Sand3DRetriever:
         if "pixel_values" in inputs and self.dtype == torch.float16:
             inputs["pixel_values"] = inputs["pixel_values"].to(self.dtype)
         with torch.inference_mode():
-            feats = _extract_feature_tensor(self.vision_model.get_image_features(**inputs))
+            feats = extract_feature_tensor(self.vision_model.get_image_features(**inputs))
             feats = F.normalize(feats.float(), dim=-1)
         return feats[0].cpu().tolist()
 
