@@ -3,6 +3,7 @@
 import argparse
 import json
 import pickle
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,7 +43,8 @@ def _pick_device(preferred: str | None = None, min_free_gb: float = 3.5) -> str:
             return "cuda"
         print(
             f"Note: only {free_bytes / (1024**3):.1f} GB CUDA VRAM free; "
-            "running query embeddings on CPU."
+            "running query embeddings on CPU.",
+            file=sys.stderr,
         )
     return "cpu"
 
@@ -59,20 +61,42 @@ class Sand3DRetriever:
             bm25_data = pickle.load(f)
         self.bm25 = bm25_data["bm25"]
 
-        self.text_model = SentenceTransformer(
-            TEXT_MODEL_ID,
-            device=self.device,
-            model_kwargs={"torch_dtype": self.dtype},
-        )
+        self.text_model = self._load_text_model()
 
         self.vision_processor = None
         self.vision_model = None
         if load_vision:
-            self.vision_processor = AutoProcessor.from_pretrained(VISION_MODEL_ID)
-            self.vision_model = AutoModel.from_pretrained(
-                VISION_MODEL_ID, dtype=self.dtype
-            ).to(self.device)
-            self.vision_model.eval()
+            self.vision_processor, self.vision_model = self._load_vision_model()
+
+    def _load_text_model(self) -> SentenceTransformer:
+        for local_only in (True, False):
+            try:
+                return SentenceTransformer(
+                    TEXT_MODEL_ID,
+                    device=self.device,
+                    local_files_only=local_only,
+                    model_kwargs={"torch_dtype": self.dtype},
+                )
+            except OSError:
+                if not local_only:
+                    raise
+        raise RuntimeError("Failed to load text model.")
+
+    def _load_vision_model(self):
+        for local_only in (True, False):
+            try:
+                processor = AutoProcessor.from_pretrained(
+                    VISION_MODEL_ID, local_files_only=local_only
+                )
+                model = AutoModel.from_pretrained(
+                    VISION_MODEL_ID, dtype=self.dtype, local_files_only=local_only
+                ).to(self.device)
+                model.eval()
+                return processor, model
+            except OSError:
+                if not local_only:
+                    raise
+        raise RuntimeError("Failed to load vision model.")
 
     def close(self) -> None:
         self.client.close()
