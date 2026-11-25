@@ -33,11 +33,25 @@ class RetrievalHit:
     payload: dict
 
 
+def _pick_device(preferred: str | None = None, min_free_gb: float = 3.5) -> str:
+    if preferred:
+        return preferred
+    if torch.cuda.is_available():
+        free_bytes, _ = torch.cuda.mem_get_info()
+        if free_bytes >= min_free_gb * (1024**3):
+            return "cuda"
+        print(
+            f"Note: only {free_bytes / (1024**3):.1f} GB CUDA VRAM free; "
+            "running query embeddings on CPU."
+        )
+    return "cpu"
+
+
 class Sand3DRetriever:
     """Query Sand3D Nature by Persian/English text, image, or both."""
 
     def __init__(self, device: str | None = None, load_vision: bool = True) -> None:
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = _pick_device(device)
         self.dtype = torch.float16 if self.device.startswith("cuda") else torch.float32
 
         self.client = QdrantClient(path=str(QDRANT_PATH))
