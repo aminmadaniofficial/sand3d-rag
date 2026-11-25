@@ -1,0 +1,682 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sand3D Nature — Hybrid RAG Explorer</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --panel-alt: #1c222b;
+      --border: #2a313c;
+      --ink: #e6edf3;
+      --muted: #8b949e;
+      --accent: #f97316;
+      --accent-ink: #0d1117;
+      --ok: #3fb950;
+      --err: #f85149;
+      --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --sans: "Vazirmatn", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    :root[data-theme="light"] {
+      --bg: #f6f8fa;
+      --panel: #ffffff;
+      --panel-alt: #f0f3f6;
+      --border: #d0d7de;
+      --ink: #1f2328;
+      --muted: #656d76;
+      --accent: #ea580c;
+      --accent-ink: #ffffff;
+      --ok: #1a7f37;
+      --err: #cf222e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      padding: 12px;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-rows: auto auto 1fr;
+      gap: 10px;
+      max-width: 1120px;
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .brand-mark {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      display: inline-block;
+    }
+
+    .status-pill {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 2px 8px;
+      background: var(--panel-alt);
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      gap: 8px;
+      padding: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+    }
+
+    input, select, button {
+      font-family: inherit;
+      font-size: 13px;
+      border-radius: 2px;
+    }
+
+    input[type="text"], select {
+      background: var(--bg);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      padding: 7px 10px;
+      outline: none;
+    }
+
+    input[type="text"]:focus, select:focus {
+      border-color: var(--accent);
+    }
+
+    .btn {
+      background: var(--panel-alt);
+      color: var(--ink);
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .btn:hover { border-color: var(--ink); }
+
+    .btn-primary {
+      background: var(--accent);
+      color: var(--accent-ink);
+      border-color: var(--accent);
+    }
+
+    .btn-primary:hover { opacity: 0.92; }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: 1.05fr 1fr;
+      gap: 10px;
+      min-height: 440px;
+    }
+
+    @media (max-width: 780px) {
+      .controls { grid-template-columns: 1fr 1fr; }
+      .controls input[type="text"] { grid-column: 1 / -1; }
+      .workspace { grid-template-columns: 1fr; }
+    }
+
+    .pane {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel-alt);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .results-list {
+      overflow-y: auto;
+      max-height: 520px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      gap: 10px;
+      padding: 10px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      text-align: left;
+      background: transparent;
+      color: inherit;
+      border-left: 3px solid transparent;
+    }
+
+    .card:hover { background: var(--panel-alt); }
+    .card.active {
+      background: var(--panel-alt);
+      border-left-color: var(--accent);
+    }
+
+    .thumb-wrap {
+      width: 88px;
+      height: 88px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .thumb-wrap img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .thumb-placeholder {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      padding: 4px;
+    }
+
+    .card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 4px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .tag {
+      border: 1px solid var(--border);
+      padding: 1px 6px;
+      color: var(--muted);
+      background: var(--bg);
+    }
+
+    .tag-score {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .card-prompt {
+      font-size: 12.5px;
+      color: var(--ink);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-ranks {
+      margin-top: 5px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .inspector-body {
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+    }
+
+    .metric {
+      border: 1px solid var(--border);
+      background: var(--bg);
+      padding: 6px 8px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+
+    .metric-val {
+      color: var(--ink);
+      font-weight: 600;
+      margin-top: 2px;
+      word-break: break-all;
+    }
+
+    .actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+
+    pre.code-box {
+      margin: 0;
+      padding: 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      font-family: var(--mono);
+      font-size: 11.5px;
+      line-height: 1.5;
+      overflow: auto;
+      max-height: 360px;
+      white-space: pre;
+      tab-size: 4;
+      flex: 1;
+    }
+
+    .empty-state {
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .badge-ok { color: var(--ok); }
+    .badge-err { color: var(--err); }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"></span>
+        <span>SAND3D-RAG // HYBRID MULTIMODAL EXPLORER</span>
+      </div>
+      <div class="status-pill" id="host-status">CONNECTING...</div>
+    </header>
+
+    <form class="controls" id="search-form">
+      <input
+        type="text"
+        id="query-input"
+        dir="auto"
+        placeholder="Search in English or Persian (e.g. صخره خزه‌دار با قارچ / spiral shell)..."
+      />
+      <select id="min-score" title="Minimum semantic score">
+        <option value="0.9">score >= 0.90</option>
+        <option value="0.8">score >= 0.80</option>
+        <option value="0.0">all scores</option>
+      </select>
+      <select id="top-k" title="Results count">
+        <option value="5">top 5</option>
+        <option value="8">top 8</option>
+        <option value="12">top 12</option>
+      </select>
+      <button type="submit" class="btn btn-primary" id="search-btn">SEARCH</button>
+    </form>
+
+    <main class="workspace">
+      <section class="pane">
+        <div class="pane-head">
+          <span>Retrieved References</span>
+          <span id="results-count">0 items</span>
+        </div>
+        <div class="results-list" id="results-list">
+          <div class="empty-state">Waiting for tool result or search query...</div>
+        </div>
+      </section>
+
+      <section class="pane">
+        <div class="pane-head">
+          <span id="inspector-title">Program Inspector</span>
+          <span id="syntax-badge"></span>
+        </div>
+        <div class="inspector-body" id="inspector-body">
+          <div class="empty-state">Select an asset card to inspect its sand3d Python script or synthesize a new variation via Ollama.</div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function () {
+      const state = {
+        items: [],
+        selectedIndex: -1,
+        generated: null,
+        rpcId: 1,
+        pending: new Map(),
+        connected: false,
+      };
+
+      const statusEl = document.getElementById("host-status");
+      const queryInput = document.getElementById("query-input");
+      const minScoreEl = document.getElementById("min-score");
+      const topKEl = document.getElementById("top-k");
+      const searchBtn = document.getElementById("search-btn");
+      const resultsList = document.getElementById("results-list");
+      const resultsCount = document.getElementById("results-count");
+      const inspectorTitle = document.getElementById("inspector-title");
+      const syntaxBadge = document.getElementById("syntax-badge");
+      const inspectorBody = document.getElementById("inspector-body");
+
+      function sendRequest(method, params) {
+        const id = state.rpcId++;
+        return new Promise((resolve, reject) => {
+          state.pending.set(id, { resolve, reject });
+          window.parent.postMessage({ jsonrpc: "2.0", id, method, params }, "*");
+        });
+      }
+
+      function sendNotification(method, params) {
+        window.parent.postMessage({ jsonrpc: "2.0", method, params }, "*");
+      }
+
+      function applyTheme(ctx) {
+        if (ctx && ctx.theme === "light") {
+          document.documentElement.setAttribute("data-theme", "light");
+        } else {
+          document.documentElement.removeAttribute("data-theme");
+        }
+      }
+
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
+      function renderResults() {
+        resultsCount.textContent = `${state.items.length} items`;
+        if (!state.items.length) {
+          resultsList.innerHTML = `<div class="empty-state">No matching assets found.</div>`;
+          return;
+        }
+        resultsList.innerHTML = state.items
+          .map((item, idx) => {
+            const active = idx === state.selectedIndex ? "active" : "";
+            const thumb = item.thumbnail_data_uri
+              ? `<img src="${item.thumbnail_data_uri}" alt="asset render" />`
+              : `<div class="thumb-placeholder">${escapeHtml(item.family || "3D")}</div>`;
+            const ranksText = item.ranks
+              ? Object.entries(item.ranks)
+                  .map(([k, v]) => `${k}:#${v}`)
+                  .join(" · ")
+              : "";
+            return `
+              <button type="button" class="card ${active}" data-idx="${idx}">
+                <div class="thumb-wrap">${thumb}</div>
+                <div>
+                  <div class="card-meta">
+                    <span class="tag tag-score">RRF ${Number(item.rrf_score || 0).toFixed(4)}</span>
+                    <span class="tag">${escapeHtml(item.family || "")}</span>
+                    <span class="tag">score ${Number(item.semantic_score || 0).toFixed(2)}</span>
+                  </div>
+                  <div class="card-prompt" dir="auto">${escapeHtml(item.prompt)}</div>
+                  <div class="card-ranks">${escapeHtml(ranksText)} · ${Number(item.triangles || 0).toLocaleString()} tris</div>
+                </div>
+              </button>
+            `;
+          })
+          .join("");
+
+        resultsList.querySelectorAll(".card").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            state.selectedIndex = Number(btn.getAttribute("data-idx"));
+            state.generated = null;
+            renderResults();
+            renderInspector();
+          });
+        });
+      }
+
+      function renderInspector() {
+        if (state.generated) {
+          const gen = state.generated;
+          inspectorTitle.textContent = `Generated: ${gen.saved_path || "script.py"}`;
+          syntaxBadge.innerHTML = gen.syntax_valid
+            ? `<span class="badge-ok">AST VALID</span>`
+            : `<span class="badge-err">SYNTAX ERROR</span>`;
+          inspectorBody.innerHTML = `
+            <div class="actions-row">
+              <button type="button" class="btn" id="copy-code-btn">COPY CODE</button>
+              <button type="button" class="btn" id="back-ref-btn">BACK TO SELECTED REF</button>
+            </div>
+            <pre class="code-box"><code>${escapeHtml(gen.code || "")}</code></pre>
+          `;
+          document.getElementById("copy-code-btn").onclick = () => copyText(gen.code || "");
+          document.getElementById("back-ref-btn").onclick = () => {
+            state.generated = null;
+            renderInspector();
+          };
+          return;
+        }
+
+        const item = state.items[state.selectedIndex];
+        if (!item) {
+          inspectorTitle.textContent = "Program Inspector";
+          syntaxBadge.textContent = "";
+          inspectorBody.innerHTML = `<div class="empty-state">Select an asset card to inspect its sand3d Python script.</div>`;
+          return;
+        }
+
+        inspectorTitle.textContent = `Entry: ${item.entry || "program"}`;
+        syntaxBadge.textContent = `#${item.id}`;
+        inspectorBody.innerHTML = `
+          <div class="detail-grid">
+            <div class="metric">
+              <div class="metric-label">Domain</div>
+              <div class="metric-val">${escapeHtml(item.domain)}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Subject</div>
+              <div class="metric-val">${escapeHtml(item.subject)}</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Triangles</div>
+              <div class="metric-val">${Number(item.triangles || 0).toLocaleString()}</div>
+            </div>
+          </div>
+          <div class="actions-row">
+            <button type="button" class="btn" id="copy-code-btn">COPY CODE</button>
+            <button type="button" class="btn btn-primary" id="gen-ollama-btn">GENERATE NEW WITH OLLAMA</button>
+          </div>
+          <pre class="code-box"><code>${escapeHtml(item.program || "// Program omitted (search with include_program=true)")}</code></pre>
+        `;
+        document.getElementById("copy-code-btn").onclick = () => copyText(item.program || "");
+        document.getElementById("gen-ollama-btn").onclick = () => runGenerate(item);
+      }
+
+      async function copyText(text) {
+        try {
+          await navigator.clipboard.writeText(text);
+          statusEl.textContent = "COPIED TO CLIPBOARD";
+        } catch {
+          statusEl.textContent = "COPY FAILED IN SANDBOX";
+        }
+      }
+
+      function applyToolResultPayload(result) {
+        if (!result) return;
+        const sc = result.structuredContent || result.structured_content;
+        if (sc) {
+          if (sc.query && !queryInput.value) {
+            queryInput.value = sc.query;
+          }
+          if (Array.isArray(sc.results)) {
+            state.items = sc.results;
+            state.selectedIndex = state.items.length ? 0 : -1;
+            state.generated = null;
+            renderResults();
+            renderInspector();
+            return;
+          }
+          if (typeof sc.code === "string") {
+            state.generated = sc;
+            renderInspector();
+            return;
+          }
+        }
+        // Fallback if plain JSON text was returned in content[0].text
+        const firstText = result.content && result.content[0] && result.content[0].text;
+        if (firstText) {
+          try {
+            const parsed = JSON.parse(firstText);
+            if (Array.isArray(parsed)) {
+              state.items = parsed;
+              state.selectedIndex = parsed.length ? 0 : -1;
+              renderResults();
+              renderInspector();
+            } else if (parsed && typeof parsed.code === "string") {
+              state.generated = parsed;
+              renderInspector();
+            }
+          } catch {
+            // Non-JSON text result
+          }
+        }
+      }
+
+      async function runSearch(e) {
+        if (e) e.preventDefault();
+        const query = queryInput.value.trim();
+        if (!query) return;
+        searchBtn.disabled = true;
+        statusEl.textContent = "SEARCHING...";
+        try {
+          const res = await sendRequest("tools/call", {
+            name: "search_sand3d_assets",
+            arguments: {
+              query,
+              top_k: Number(topKEl.value),
+              min_score: Number(minScoreEl.value),
+              include_program: true,
+            },
+          });
+          applyToolResultPayload(res);
+          statusEl.textContent = "READY";
+        } catch (err) {
+          statusEl.textContent = `ERR: ${err.message || err}`;
+        } finally {
+          searchBtn.disabled = false;
+        }
+      }
+
+      async function runGenerate(item) {
+        const prompt = queryInput.value.trim() || item.prompt || "mossy rock";
+        const btn = document.getElementById("gen-ollama-btn");
+        if (btn) btn.disabled = true;
+        statusEl.textContent = "GENERATING VIA OLLAMA...";
+        try {
+          const res = await sendRequest("tools/call", {
+            name: "generate_sand3d_program",
+            arguments: {
+              prompt,
+              top_k: 3,
+              model: "gemma4:12b",
+              output_filename: "mcp_app_generated.py",
+            },
+          });
+          applyToolResultPayload(res);
+          statusEl.textContent = "GENERATED";
+        } catch (err) {
+          statusEl.textContent = `GEN ERR: ${err.message || err}`;
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+
+      window.addEventListener("message", (event) => {
+        const msg = event.data;
+        if (!msg || typeof msg !== "object") return;
+
+        if (msg.id !== undefined && state.pending.has(msg.id)) {
+          const { resolve, reject } = state.pending.get(msg.id);
+          state.pending.delete(msg.id);
+          if (msg.error) reject(new Error(msg.error.message || "RPC Error"));
+          else resolve(msg.result);
+          return;
+        }
+
+        if (msg.method === "ui/notifications/tool-result") {
+          applyToolResultPayload(msg.params && (msg.params.result || msg.params));
+          statusEl.textContent = "READY";
+        } else if (msg.method === "ui/notifications/tool-input") {
+          const args = msg.params && msg.params.arguments;
+          if (args && args.query) queryInput.value = args.query;
+        } else if (msg.method === "ui/notifications/host-context-changed") {
+          applyTheme(msg.params);
+        }
+      });
+
+      document.getElementById("search-form").addEventListener("submit", runSearch);
+
+      sendRequest("ui/initialize", {
+        appInfo: { name: "sand3d-rag-explorer", version: "1.0.0" },
+        appCapabilities: {},
+        protocolVersion: "2025-11-21",
+      })
+        .then((res) => {
+          state.connected = true;
+          applyTheme(res && res.hostContext);
+          statusEl.textContent = "MCP APP CONNECTED";
+          sendNotification("ui/notifications/initialized", {});
+        })
+        .catch(() => {
+          statusEl.textContent = "STANDALONE PREVIEW";
+        });
+    })();
+  </script>
+</body>
+</html>
