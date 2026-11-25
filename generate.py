@@ -1,6 +1,7 @@
 """Generate a new sand3d Python program using Hybrid RAG + Ollama (or OpenAI-compatible API)."""
 
 import argparse
+import ast
 import base64
 import gc
 import html
@@ -55,7 +56,7 @@ def build_generation_prompt(
     examples_block = []
     for i, hit in enumerate(hits, start=1):
         p = hit.payload
-        prog = (p.get("program") or "")[:9000]
+        prog = (p.get("program") or "")[:6000]
         examples_block.append(
             f"### Reference Example {i}\n"
             f"Prompt: {p.get('prompt')}\n"
@@ -65,7 +66,7 @@ def build_generation_prompt(
         )
 
     user_message = (
-        f"## sand3d API Reference (condensed)\n{api_summary[:6000]}\n\n"
+        f"## sand3d API Reference (condensed)\n{api_summary[:4500]}\n\n"
         + "\n\n".join(examples_block)
         + f"\n\n## User Request\n{user_prompt}\n\n"
         "Write a new complete `sand3d` Python program for the User Request above."
@@ -92,22 +93,24 @@ def call_ollama(
             msg,
         ],
         "stream": False,
-        "options": {"temperature": 0.3, "num_ctx": 16384},
+        "options": {"temperature": 0.3, "num_ctx": 24576, "num_predict": 4096},
     }
     with httpx.Client(trust_env=False, timeout=300.0) as client:
         resp = client.post(f"{ollama_url}/api/chat", json=payload)
     resp.raise_for_status()
-    return resp.json()["message"]["content"]
+    data = resp.json()
+    if data.get("done_reason") == "length":
+        print("Warning: Ollama response reached num_predict token limit and may be truncated.")
+    return data["message"]["content"]
 
 
 def extract_python_code(text: str) -> str:
-    match = re.search(r"```python\s*(.*?)```", text, flags=re.S | re.I)
+    match = re.search(r"```(?:python)?\s*(.*?)```", text, flags=re.S | re.I)
     if match:
         return match.group(1).strip()
-    match = re.search(r"```\s*(.*?)```", text, flags=re.S)
-    if match:
-        return match.group(1).strip()
-    return text.strip()
+    cleaned = re.sub(r"^\s*```(?:python)?\s*", "", text, flags=re.I)
+    cleaned = re.sub(r"\s*```\s*$", "", cleaned)
+    return cleaned.strip()
 
 
 def main() -> None:
@@ -150,7 +153,11 @@ def main() -> None:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     out_path = OUTPUT_DIR / args.out
     out_path.write_text(code + "\n", encoding="utf-8")
-    print(f"Saved generated program to: {out_path}")
+    try:
+        ast.parse(code)
+        print(f"Saved valid Python program to: {out_path}")
+    except SyntaxError as exc:
+        print(f"Saved to {out_path}, but Python syntax check failed: {exc}")
 
 
 if __name__ == "__main__":

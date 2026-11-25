@@ -45,6 +45,10 @@ class TestGenerationHelpers(unittest.TestCase):
         reply = "Here is the script:\n```python\nimport sand3d as s3d\nprint('ok')\n```\nDone."
         self.assertEqual(extract_python_code(reply), "import sand3d as s3d\nprint('ok')")
 
+    def test_extract_python_code_unclosed_fence(self) -> None:
+        reply = "```python\nimport sand3d as s3d\nx = 1"
+        self.assertEqual(extract_python_code(reply), "import sand3d as s3d\nx = 1")
+
     def test_build_generation_prompt_contains_examples_and_request(self) -> None:
         class DummyHit:
             payload = {
