@@ -79,14 +79,14 @@ python generate.py \
 
 Generated scripts are written to `outputs/`.
 
-### 4. Use as an MCP Server (Antigravity, Claude Desktop, Cursor, OpenCode)
+### 4. Use as an MCP Server & Interactive MCP App (Antigravity, Claude Desktop, Cursor)
 
-Expose the hybrid RAG directly to coding agents via [Model Context Protocol](https://modelcontextprotocol.io/) (`mcp_server.py`):
+Expose the hybrid RAG directly to coding agents via [Model Context Protocol](https://modelcontextprotocol.io/) (`mcp_server.py`) with built-in **MCP Apps** (`io.modelcontextprotocol/ui`) interactive UI support (`ui://sand3d-rag/explorer.html`):
 
-- `search_sand3d_assets` — search by Persian/English text, reference image, or both (returns `sand3d` programs & metadata)
+- `search_sand3d_assets` — search by Persian/English text, reference image, or both (renders interactive card gallery + code inspector in MCP Apps-capable hosts like Antigravity, and falls back to clean JSON text elsewhere)
 - `get_sand3d_api_reference` — returns the condensed `sand3d` Python API reference
 - `get_index_stats` — returns local Qdrant collection info
-- `generate_sand3d_program` — retrieves references and generates a syntax-checked script via local Ollama
+- `generate_sand3d_program` — retrieves references and generates a syntax-checked script via local Ollama (rendered live in the MCP App code inspector)
 
 Add this entry to your MCP client config (e.g. `mcp_config.json`):
 
@@ -127,7 +127,9 @@ sand3d-rag/
 ├── build_index.py     # Dataset loader, BGE-M3 + SigLIP2 encoding, Qdrant & BM25 builder
 ├── retriever.py       # Sand3DRetriever with RRF fusion and CLI
 ├── generate.py        # RAG prompt builder + Ollama code generator
-├── mcp_server.py      # MCP server (stdio / streamable-http) for AI agents
+├── mcp_server.py      # MCP server + MCP App (io.modelcontextprotocol/ui)
+├── ui/
+│   └── explorer.html  # Self-contained MCP App interactive explorer UI
 ├── tests/
 ├── requirements.txt
 ├── LICENSE
