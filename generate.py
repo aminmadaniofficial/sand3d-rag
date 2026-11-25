@@ -92,7 +92,8 @@ def call_ollama(
         "stream": False,
         "options": {"temperature": 0.3, "num_ctx": 16384},
     }
-    resp = httpx.post(f"{ollama_url}/api/chat", json=payload, timeout=300.0)
+    with httpx.Client(trust_env=False, timeout=300.0) as client:
+        resp = client.post(f"{ollama_url}/api/chat", json=payload)
     resp.raise_for_status()
     return resp.json()["message"]["content"]
 
